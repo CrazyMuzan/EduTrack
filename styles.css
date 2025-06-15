@@ -1,0 +1,11 @@
+footer {
+    display: flex;
+    align-items: center;
+    /* Optionally add padding, background, etc. */
+}
+
+footer img {
+    width: 100px;
+    margin-right: 16px;
+    /* Remove margin:auto or display:block if present */
+}
