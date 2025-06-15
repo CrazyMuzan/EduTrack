@@ -8,6 +8,11 @@
     <title>Emman EduTrack</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-analytics-compat.js"></script>
     <style>
         body {
             font-family: 'Poppins', sans-serif;
@@ -38,9 +43,49 @@
         .fade-in {
             animation: fadeIn 0.5s ease forwards;
         }
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid #fff;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            z-index: 1000;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
+    <!-- Toast Notification -->
+    <div id="toast" class="toast bg-green-600 shadow-lg"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl p-6 flex items-center space-x-4">
+            <div class="spinner border-blue-600 border-t-blue-600"></div>
+            <p id="loadingText" class="text-gray-700 font-medium">Loading...</p>
+        </div>
+    </div>
+
     <div class="min-h-screen flex flex-col">
         <!-- Header -->
         <header class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
@@ -116,7 +161,7 @@
         <!-- Footer -->
         <footer class="bg-gray-800 text-white py-6">
             <div class="container mx-auto px-4 text-center">
-                <p>© 2023 Emman EduTrack. All rights reserved.</p>
+                <p>© 2025 Emman EduTrack. All rights reserved.</p>
             </div>
         </footer>
     </div>
@@ -161,7 +206,7 @@
                     <div>
                         <label class="block text-gray-700 mb-2">Profile Picture URL</label>
                         <input type="text" id="profilePicture" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://example.com/image.jpg">
-                        <p class="text-sm text-gray-500 mt-1">Leave empty to use default avatar</p>
+                        <p class="text-sm text-gray-500 mt-1">Enter a URL for the student's profile picture</p>
                     </div>
                     <div>
                         <label class="block text-gray-700 mb-2">Description</label>
@@ -201,7 +246,10 @@
                     
                     <div class="flex justify-end space-x-3 pt-4">
                         <button type="button" id="cancelBtn" class="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition duration-300">Cancel</button>
-                        <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-300">Save Student</button>
+                        <button type="submit" id="saveStudentBtn" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-300">
+                            <span>Save Student</span>
+                            <span id="saveSpinner" class="spinner ml-2 hidden"></span>
+                        </button>
                     </div>
                 </form>
             </div>
@@ -219,9 +267,6 @@
                     </svg>
                 </button>
             </div>
-
-Hoy
-
             <div class="p-6">
                 <form id="gradeForm" class="space-y-4">
                     <input type="hidden" id="gradeStudentId">
@@ -242,7 +287,10 @@ Hoy
                     
                     <div class="flex justify-end space-x-3 pt-4">
                         <button type="button" id="cancelGradeBtn" class="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition duration-300">Cancel</button>
-                        <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-300">Save Grades</button>
+                        <button type="submit" id="saveGradeBtn" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-300">
+                            <span>Save Grades</span>
+                            <span id="gradeSpinner" class="spinner ml-2 hidden"></span>
+                        </button>
                     </div>
                 </form>
             </div>
@@ -250,85 +298,22 @@ Hoy
     </div>
 
     <script>
-        // Sample data
-        let students = [
-            {
-                id: '1',
-                firstName: 'John',
-                lastName: 'Doe',
-                section: 'section-a',
-                studentId: 'S2023-001',
-                profilePicture: '',
-                description: 'Excellent student with strong analytical skills. Active participant in class discussions.',
-                grades: {
-                    1: { writtenWorks: 85, performanceTasks: 90, quarterlyAssessment: 88 },
-                    2: { writtenWorks: 82, performanceTasks: 88, quarterlyAssessment: 85 },
-                    3: { writtenWorks: 87, performanceTasks: 92, quarterlyAssessment: 90 },
-                    4: { writtenWorks: 90, performanceTasks: 94, quarterlyAssessment: 92 }
-                }
-            },
-            {
-                id: '2',
-                firstName: 'Jane',
-                lastName: 'Smith',
-                section: 'section-a',
-                studentId: 'S2023-002',
-                profilePicture: '',
-                description: 'Creative thinker who excels in group projects. Shows great leadership potential.',
-                grades: {
-                    1: { writtenWorks: 78, performanceTasks: 95, quarterlyAssessment: 82 },
-                    2: { writtenWorks: 80, performanceTasks: 92, quarterlyAssessment: 85 },
-                    3: { writtenWorks: 82, performanceTasks: 90, quarterlyAssessment: 88 },
-                    4: { writtenWorks: 85, performanceTasks: 93, quarterlyAssessment: 90 }
-                }
-            },
-            {
-                id: '3',
-                firstName: 'Michael',
-                lastName: 'Johnson',
-                section: 'section-b',
-                studentId: 'S2023-003',
-                profilePicture: '',
-                description: 'Diligent student who consistently submits quality work. Needs encouragement to participate more in class.',
-                grades: {
-                    1: { writtenWorks: 90, performanceTasks: 85, quarterlyAssessment: 92 },
-                    2: { writtenWorks: 88, performanceTasks: 87, quarterlyAssessment: 90 },
-                    3: { writtenWorks: 92, performanceTasks: 88, quarterlyAssessment: 94 },
-                    4: { writtenWorks: 94, performanceTasks: 90, quarterlyAssessment: 95 }
-                }
-            },
-            {
-                id: '4',
-                firstName: 'Emily',
-                lastName: 'Williams',
-                section: 'section-c',
-                studentId: 'S2023-004',
-                profilePicture: '',
-                description: 'Quick learner with excellent problem-solving skills. Helps peers understand difficult concepts.',
-                grades: {
-                    1: { writtenWorks: 95, performanceTasks: 92, quarterlyAssessment: 96 },
-                    2: { writtenWorks: 93, performanceTasks: 90, quarterlyAssessment: 94 },
-                    3: { writtenWorks: 96, performanceTasks: 94, quarterlyAssessment: 97 },
-                    4: { writtenWorks: 98, performanceTasks: 95, quarterlyAssessment: 98 }
-                }
-            },
-            {
-                id: '5',
-                firstName: 'David',
-                lastName: 'Brown',
-                section: 'section-d',
-                studentId: 'S2023-005',
-                profilePicture: '',
-                description: 'Enthusiastic student who enjoys hands-on activities. Shows improvement in written assignments.',
-                grades: {
-                    1: { writtenWorks: 75, performanceTasks: 88, quarterlyAssessment: 80 },
-                    2: { writtenWorks: 78, performanceTasks: 90, quarterlyAssessment: 82 },
-                    3: { writtenWorks: 80, performanceTasks: 92, quarterlyAssessment: 85 },
-                    4: { writtenWorks: 83, performanceTasks: 94, quarterlyAssessment: 88 }
-                }
-            }
-        ];
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCjelf6cDjc91vaJERMF7hdbI0jBduKPyo",
+            authDomain: "edutracker-35a4e.firebaseapp.com",
+            projectId: "edutracker-35a4e",
+            storageBucket: "edutracker-35a4e.firebasestorage.app",
+            messagingSenderId: ".",
+            appId: "1:.:web:db7fb65f2c7b849673eb85",
+            measurementId: "G-SDLZ5Z7EJT"
+        };
 
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const analytics = firebase.analytics();
+        
         // DOM Elements
         const studentList = document.getElementById('studentList');
         const studentDetails = document.getElementById('studentDetails');
@@ -339,8 +324,12 @@ Hoy
         const searchInput = document.getElementById('searchStudent');
         const sectionTabs = document.querySelectorAll('.section-tab');
         const quarterTabs = document.querySelectorAll('.quarter-tab');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
+        const toast = document.getElementById('toast');
         
         // Current state
+        let students = [];
         let currentSection = 'section-a';
         let currentQuarter = 1;
         let selectedStudentId = null;
@@ -348,9 +337,38 @@ Hoy
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', () => {
-            loadStudents();
             setupEventListeners();
+            fetchStudents();
         });
+
+        // Show loading overlay
+        function showLoading(message = 'Loading...') {
+            loadingText.textContent = message;
+            loadingOverlay.classList.remove('hidden');
+        }
+
+        // Hide loading overlay
+        function hideLoading() {
+            loadingOverlay.classList.add('hidden');
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'success') {
+            toast.textContent = message;
+            toast.className = 'toast show';
+            
+            if (type === 'success') {
+                toast.classList.add('bg-green-600');
+            } else if (type === 'error') {
+                toast.classList.add('bg-red-600');
+            } else if (type === 'info') {
+                toast.classList.add('bg-blue-600');
+            }
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
 
         // Setup event listeners
         function setupEventListeners() {
@@ -411,6 +429,24 @@ Hoy
             document.getElementById('exportBtn').addEventListener('click', exportData);
         }
 
+        // Fetch students from Firebase
+        async function fetchStudents() {
+            showLoading('Loading students...');
+            try {
+                const snapshot = await db.collection('students').get();
+                students = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                loadStudents();
+                hideLoading();
+            } catch (error) {
+                console.error('Error fetching students:', error);
+                showToast('Failed to load students. Please try again.', 'error');
+                hideLoading();
+            }
+        }
+
         // Load students based on current section and search
         function loadStudents() {
             const searchTerm = searchInput.value.toLowerCase();
@@ -451,7 +487,7 @@ Hoy
                 let quarterCount = 0;
                 
                 for (let quarter = 1; quarter <= 4; quarter++) {
-                    if (student.grades[quarter]) {
+                    if (student.grades && student.grades[quarter]) {
                         const quarterGrade = calculateQuarterGrade(student.grades[quarter]);
                         if (quarterGrade > 0) {
                             totalGrade += quarterGrade;
@@ -503,7 +539,7 @@ Hoy
             let overallCount = 0;
             
             for (let quarter = 1; quarter <= 4; quarter++) {
-                if (student.grades[quarter]) {
+                if (student.grades && student.grades[quarter]) {
                     const quarterGrade = calculateQuarterGrade(student.grades[quarter]);
                     if (quarterGrade > 0) {
                         overallTotal += quarterGrade;
@@ -566,7 +602,7 @@ Hoy
                                 </div>
                                 
                                 ${[1, 2, 3, 4].map(quarter => {
-                                    const grades = student.grades[quarter] || { writtenWorks: '-', performanceTasks: '-', quarterlyAssessment: '-' };
+                                    const grades = student.grades && student.grades[quarter] ? student.grades[quarter] : { writtenWorks: '-', performanceTasks: '-', quarterlyAssessment: '-' };
                                     const average = calculateQuarterGrade(grades);
                                     const averageDisplay = average > 0 ? average.toFixed(1) : '-';
                                     
@@ -594,7 +630,7 @@ Hoy
                             <h3 class="text-lg font-semibold mb-4">Performance Chart</h3>
                             <div class="h-64 flex items-end space-x-6">
                                 ${[1, 2, 3, 4].map(quarter => {
-                                    const grades = student.grades[quarter] || { writtenWorks: 0, performanceTasks: 0, quarterlyAssessment: 0 };
+                                    const grades = student.grades && student.grades[quarter] ? student.grades[quarter] : { writtenWorks: 0, performanceTasks: 0, quarterlyAssessment: 0 };
                                     const average = calculateQuarterGrade(grades);
                                     const height = average > 0 ? (average / 100) * 100 : 0;
                                     
@@ -663,8 +699,8 @@ Hoy
             document.getElementById('lastName').value = student.lastName;
             document.getElementById('section').value = student.section;
             document.getElementById('studentIdNumber').value = student.studentId;
-            document.getElementById('profilePicture').value = student.profilePicture;
-            document.getElementById('description').value = student.description;
+            document.getElementById('profilePicture').value = student.profilePicture || '';
+            document.getElementById('description').value = student.description || '';
             
             // Set the current quarter to 1 for editing
             currentQuarter = 1;
@@ -686,7 +722,7 @@ Hoy
             
             if (studentId) {
                 const student = students.find(s => s.id === studentId);
-                if (student && student.grades[currentQuarter]) {
+                if (student && student.grades && student.grades[currentQuarter]) {
                     grades = student.grades[currentQuarter];
                 }
             }
@@ -719,7 +755,7 @@ Hoy
             document.getElementById('gradeStudentId').value = studentId;
             document.getElementById('gradeQuarter').value = quarter;
             
-            const grades = student.grades[quarter] || { writtenWorks: '', performanceTasks: '', quarterlyAssessment: '' };
+            const grades = student.grades && student.grades[quarter] ? student.grades[quarter] : { writtenWorks: '', performanceTasks: '', quarterlyAssessment: '' };
             document.getElementById('editWrittenWorks').value = grades.writtenWorks !== '-' ? grades.writtenWorks : '';
             document.getElementById('editPerformanceTasks').value = grades.performanceTasks !== '-' ? grades.performanceTasks : '';
             document.getElementById('editQuarterlyAssessment').value = grades.quarterlyAssessment !== '-' ? grades.quarterlyAssessment : '';
@@ -727,9 +763,15 @@ Hoy
             showModal(gradeEditModal);
         }
 
-        // Save student
-        function saveStudent() {
-            const id = document.getElementById('studentId').value || Date.now().toString();
+        // Save student to Firebase
+        async function saveStudent() {
+            const saveBtn = document.getElementById('saveStudentBtn');
+            const spinner = document.getElementById('saveSpinner');
+            
+            saveBtn.disabled = true;
+            spinner.classList.remove('hidden');
+            
+            const id = document.getElementById('studentId').value || null;
             const firstName = document.getElementById('firstName').value;
             const lastName = document.getElementById('lastName').value;
             const section = document.getElementById('section').value;
@@ -754,51 +796,97 @@ Hoy
             }
             
             const student = {
-                id,
                 firstName,
                 lastName,
                 section,
                 studentId,
                 profilePicture,
                 description,
-                grades
+                grades,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
             
-            if (isEditing) {
-                // Update existing student
-                const index = students.findIndex(s => s.id === id);
-                if (index !== -1) {
-                    students[index] = student;
+            try {
+                let docRef;
+                
+                if (isEditing && id) {
+                    // Update existing student
+                    docRef = db.collection('students').doc(id);
+                    await docRef.update(student);
+                    
+                    // Update local array
+                    const index = students.findIndex(s => s.id === id);
+                    if (index !== -1) {
+                        students[index] = { ...student, id };
+                    }
+                    
+                    showToast('Student updated successfully!');
+                } else {
+                    // Add new student
+                    student.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                    docRef = await db.collection('students').add(student);
+                    
+                    // Add to local array
+                    students.push({ ...student, id: docRef.id });
+                    
+                    showToast('Student added successfully!');
                 }
-            } else {
-                // Add new student
-                students.push(student);
-            }
-            
-            hideModal(studentModal);
-            loadStudents();
-            
-            // If this was the selected student, update the details view
-            if (selectedStudentId === id) {
-                renderStudentDetails(student);
+                
+                hideModal(studentModal);
+                loadStudents();
+                
+                // If this was the selected student, update the details view
+                if (selectedStudentId === (id || docRef.id)) {
+                    const updatedStudent = students.find(s => s.id === (id || docRef.id));
+                    renderStudentDetails(updatedStudent);
+                }
+                
+                // Log event to analytics
+                analytics.logEvent(isEditing ? 'student_updated' : 'student_added', {
+                    section: section
+                });
+                
+            } catch (error) {
+                console.error('Error saving student:', error);
+                showToast('Failed to save student. Please try again.', 'error');
+            } finally {
+                saveBtn.disabled = false;
+                spinner.classList.add('hidden');
             }
         }
 
-        // Save grades
-        function saveGrades() {
+        // Save grades to Firebase
+        async function saveGrades() {
+            const saveBtn = document.getElementById('saveGradeBtn');
+            const spinner = document.getElementById('gradeSpinner');
+            
+            saveBtn.disabled = true;
+            spinner.classList.remove('hidden');
+            
             const studentId = document.getElementById('gradeStudentId').value;
             const quarter = document.getElementById('gradeQuarter').value;
             const writtenWorks = document.getElementById('editWrittenWorks').value ? parseInt(document.getElementById('editWrittenWorks').value) : '-';
             const performanceTasks = document.getElementById('editPerformanceTasks').value ? parseInt(document.getElementById('editPerformanceTasks').value) : '-';
             const quarterlyAssessment = document.getElementById('editQuarterlyAssessment').value ? parseInt(document.getElementById('editQuarterlyAssessment').value) : '-';
             
-            const student = students.find(s => s.id === studentId);
-            if (student) {
-                if (!student.grades) {
-                    student.grades = {};
-                }
+            try {
+                const studentRef = db.collection('students').doc(studentId);
                 
-                student.grades[quarter] = { writtenWorks, performanceTasks, quarterlyAssessment };
+                // Update the specific quarter grades using dot notation
+                const updateData = {};
+                updateData[`grades.${quarter}`] = { writtenWorks, performanceTasks, quarterlyAssessment };
+                updateData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                
+                await studentRef.update(updateData);
+                
+                // Update local array
+                const student = students.find(s => s.id === studentId);
+                if (student) {
+                    if (!student.grades) {
+                        student.grades = {};
+                    }
+                    student.grades[quarter] = { writtenWorks, performanceTasks, quarterlyAssessment };
+                }
                 
                 hideModal(gradeEditModal);
                 loadStudents();
@@ -807,27 +895,59 @@ Hoy
                 if (selectedStudentId === studentId) {
                     renderStudentDetails(student);
                 }
+                
+                showToast('Grades updated successfully!');
+                
+                // Log event to analytics
+                analytics.logEvent('grades_updated', {
+                    quarter: quarter
+                });
+                
+            } catch (error) {
+                console.error('Error saving grades:', error);
+                showToast('Failed to save grades. Please try again.', 'error');
+            } finally {
+                saveBtn.disabled = false;
+                spinner.classList.add('hidden');
             }
         }
 
-        // Delete student
-        function deleteStudent(id) {
-            if (confirm('Are you sure you want to delete this student?')) {
-                students = students.filter(student => student.id !== id);
-                loadStudents();
+        // Delete student from Firebase
+        async function deleteStudent(id) {
+            if (confirm('Are you sure you want to delete this student? This action cannot be undone.')) {
+                showLoading('Deleting student...');
                 
-                // Clear details if the deleted student was selected
-                if (selectedStudentId === id) {
-                    selectedStudentId = null;
-                    studentDetails.innerHTML = `
-                        <div class="text-center py-16">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-20 w-20 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                            <h3 class="text-xl text-gray-500 font-medium">Select a student to view details</h3>
-                            <p class="text-gray-400 mt-2">Student information and grades will appear here</p>
-                        </div>
-                    `;
+                try {
+                    await db.collection('students').doc(id).delete();
+                    
+                    // Remove from local array
+                    students = students.filter(student => student.id !== id);
+                    loadStudents();
+                    
+                    // Clear details if the deleted student was selected
+                    if (selectedStudentId === id) {
+                        selectedStudentId = null;
+                        studentDetails.innerHTML = `
+                            <div class="text-center py-16">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-20 w-20 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                <h3 class="text-xl text-gray-500 font-medium">Select a student to view details</h3>
+                                <p class="text-gray-400 mt-2">Student information and grades will appear here</p>
+                            </div>
+                        `;
+                    }
+                    
+                    showToast('Student deleted successfully!');
+                    
+                    // Log event to analytics
+                    analytics.logEvent('student_deleted');
+                    
+                } catch (error) {
+                    console.error('Error deleting student:', error);
+                    showToast('Failed to delete student. Please try again.', 'error');
+                } finally {
+                    hideLoading();
                 }
             }
         }
@@ -841,6 +961,9 @@ Hoy
             document.body.appendChild(downloadAnchorNode);
             downloadAnchorNode.click();
             downloadAnchorNode.remove();
+            
+            // Log event to analytics
+            analytics.logEvent('data_exported');
         }
 
         // Show modal
@@ -859,5 +982,5 @@ Hoy
             }, 300);
         }
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'94fe836bb1ebbc40',t:'MTc0OTk1MzI0MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'94ff240240d4bc3d',t:'MTc0OTk1OTgxOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
