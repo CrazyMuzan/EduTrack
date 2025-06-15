@@ -316,6 +316,17 @@
 
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
+        </script>
+
+<!-- Paste the authentication check here -->
+<script>
+// Place this as the first script in <body> or <head> after Firebase scripts are loaded
+firebase.auth().onAuthStateChanged(function(user) {
+    if (!user) {
+        window.location.href = "login.html";
+    }
+});
+</script>
         const db = firebase.firestore();
         const analytics = firebase.analytics();
         
